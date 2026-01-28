@@ -15,20 +15,8 @@ It looks like you are working with a Laravel package called **LaraSwagger**, whi
 
 To install **LaraSwagger** via Composer directly from Git, follow these steps:
 
-1. **Add the repository to `composer.json`:**
 
-   In your Laravel project's `composer.json` file, add the repository configuration for LaraSwagger:
-
-   ```json
-   "repositories": [
-       {
-           "type": "vcs",
-           "url": "https://github.com/abdo-taher/laraswagger"
-       }
-   ]
-   ```
-
-2. **Require the package using Composer:**
+1. **Require the package using Composer:**
 
    Run the following command in your terminal to install the package:
 
@@ -36,7 +24,7 @@ To install **LaraSwagger** via Composer directly from Git, follow these steps:
    composer require abdo-taher/laraswagger:dev-main
    ```
 
-3. **Publish the config file:**
+2. **Publish the config file:**
 
    Publish the configuration file for the package to customize settings:
 

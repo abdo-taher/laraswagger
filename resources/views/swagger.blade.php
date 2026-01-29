@@ -11,7 +11,7 @@
 <script>
 window.onload = function() {
     SwaggerUIBundle({
-        url: "{{ url('/openapi.json') }}",
+        url: "{{ config('path') }}",
         dom_id: '#swagger-ui',
 
         // ✅ search/filter

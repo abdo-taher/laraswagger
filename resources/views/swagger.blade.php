@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>API Docs</title>
+    <title>Global API Docs</title>
     <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
 <script>
 window.onload = function() {
     SwaggerUIBundle({
-        url: "{{ url('/'.config('laraswagger.file_name').'.json') }}",
+        url: "{{ url('/api-docs.json') }}",
         dom_id: '#swagger-ui',
 
         // ✅ search/filter

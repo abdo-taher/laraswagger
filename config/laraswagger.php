@@ -3,10 +3,7 @@
 return [
 
     'app_name' => env('APP_NAME', 'Laravel'),
-    'file_name' => 'api-docs',
-    'path' => public_path('api-docs.json'),
     'generator' => [
-
         'base_url' => env('APP_URL','http://localhost' ),
 
         'capture_response' => true,
@@ -24,9 +21,9 @@ return [
             'login' => [
                 'url' => '/api/login',
                 'method' => 'POST',
-                'email' => 'docs@local.test',
-                'password' => '12345678',
-                'token_key' => 'token',
+                'email' => env('MAIN_USER_EMAIL','a@a.com'),
+                'password' => env('MAIN_USER_PASSWORD','password'),
+                'token_key' => 'token'
             ],
         ],
     ],

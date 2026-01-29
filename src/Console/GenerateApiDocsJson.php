@@ -25,7 +25,7 @@ class GenerateApiDocsJson extends Command
         {--token-key=}
         {--skip=}';
 
-    protected $description = 'Generate Swagger-style API documentation JSON';
+    protected $description = 'Generate OpenAPI 3 JSON for Swagger UI';
 
     public function handle()
     {
@@ -40,7 +40,7 @@ class GenerateApiDocsJson extends Command
             : config('laraswagger.generator.skip', []);
 
         $token = $this->resolveToken($timeout);
-        $endpoints = [];
+        $rawEndpoints = [];
 
         foreach (Route::getRoutes() as $route) {
             if (!str_starts_with($route->uri(), 'api/')) continue;
@@ -71,20 +71,65 @@ class GenerateApiDocsJson extends Command
                 );
             }
 
-            $endpoints[] = $endpoint;
+            $rawEndpoints[] = $endpoint;
         }
 
-        $path = base_path($this->option('path') ?? 'api-docs');
+        // Transform raw endpoints into OpenAPI paths
+        $paths = [];
+        foreach ($rawEndpoints as $ep) {
+            $uri = $ep['uri'];
+            $method = strtolower(explode('|', $ep['method'])[0]);
+
+            // Build requestBody for POST/PUT/PATCH
+            $requestBody = null;
+            if (in_array(strtoupper($method), ['POST', 'PUT', 'PATCH'])) {
+                $requestBody = $this->buildRequestBodyFromValidation($ep['parameters']);
+            }
+
+            $paths[$uri][$method] = [
+                'tags' => [$ep['group'] ?? 'general'],
+                'summary' => trim(($ep['name'] ?? '') . ' ' . $uri),
+                'description' => $ep['name'] ?? '',
+                'parameters' => [], // Optional: extend to query/path params if needed
+                'requestBody' => $requestBody,
+                'security' => $ep['auth_required'] ? [['bearerAuth' => []]] : [],
+                'responses' => [
+                    (string)($ep['response']['status'] ?? 200) => [
+                        'description' => 'Auto captured response',
+                        'content' => [
+                            'application/json' => [
+                                'example' => $ep['response']['body'] ?? null
+                            ]
+                        ]
+                    ]
+                ]
+            ];
+        }
+
+        $path = base_path($this->option('path') ?? 'public/api-docs.json');
         if (!is_dir(dirname($path))) mkdir(dirname($path), 0775, true);
 
         file_put_contents($path, json_encode([
-            'project' => config('app.name'),
-            'base_url' => $this->getBaseUrl(),
-            'generated_at' => now()->toDateTimeString(),
-            'endpoints' => $endpoints,
+            'openapi' => '3.0.0',
+            'info' => [
+                'title' => config('app.name') . ' API Documentation',
+                'version' => '1.0.0',
+            ],
+            'servers' => [
+                ['url' => $this->getBaseUrl()]
+            ],
+            'components' => [
+                'securitySchemes' => [
+                    'bearerAuth' => [
+                        'type' => 'http',
+                        'scheme' => 'bearer',
+                    ]
+                ]
+            ],
+            'paths' => $paths,
         ], JSON_PRETTY_PRINT));
 
-        $this->info('✅ API documentation generated successfully');
+        $this->info('✅ OpenAPI JSON generated successfully');
     }
 
     /* ---------- Helpers ---------- */
@@ -158,6 +203,40 @@ class GenerateApiDocsJson extends Command
             }
         } catch (\Throwable) {}
         return [];
+    }
+
+    private function buildRequestBodyFromValidation(array $validation): ?array
+    {
+        if (empty($validation)) return null;
+
+        $properties = [];
+        $required = [];
+
+        foreach ($validation as $field => $rules) {
+            if (is_string($rules)) $rules = explode('|', $rules);
+
+            $type = 'string';
+            $rulesStr = implode('|', $rules);
+
+            if (str_contains($rulesStr, 'numeric') || str_contains($rulesStr, 'integer')) $type = 'number';
+            if (str_contains($rulesStr, 'boolean')) $type = 'boolean';
+
+            $properties[$field] = ['type' => $type];
+            if (str_contains($rulesStr, 'required')) $required[] = $field;
+        }
+
+        return [
+            'required' => !empty($required),
+            'content' => [
+                'application/json' => [
+                    'schema' => [
+                        'type' => 'object',
+                        'properties' => $properties,
+                        'required' => $required,
+                    ]
+                ]
+            ]
+        ];
     }
 
     private function buildEndpointUrl(string $uri): string

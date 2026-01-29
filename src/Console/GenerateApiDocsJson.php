@@ -87,10 +87,10 @@ class GenerateApiDocsJson extends Command
             }
 
             $paths[$uri][$method] = [
-                'tags' => [$ep['group'] ?? 'general'],
+                'tags' => [$ep['group']],
                 'summary' => trim(($ep['name'] ?? '') . ' ' . $uri),
                 'description' => $ep['name'] ?? '',
-                'parameters' => [], // Optional: extend to query/path params if needed
+                'parameters' => [], // Optional: extend for query/path params
                 'requestBody' => $requestBody,
                 'security' => $ep['auth_required'] ? [['bearerAuth' => []]] : [],
                 'responses' => [
@@ -188,7 +188,12 @@ class GenerateApiDocsJson extends Command
 
     private function detectGroup(string $uri, ?string $name): string
     {
-        return explode('/', trim($uri, '/'))[1] ?? ($name ? explode('.', $name)[0] : 'general');
+        // Merge by first URI segment, remove api prefix
+        $segments = explode('/', trim($uri, '/'));
+        if (isset($segments[0]) && $segments[0] === 'api') {
+            return $segments[1] ?? 'general';
+        }
+        return $segments[0] ?? 'general';
     }
 
     private function extractValidationRules(string $c, string $m): array

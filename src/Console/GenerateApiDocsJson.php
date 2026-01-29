@@ -188,13 +188,23 @@ class GenerateApiDocsJson extends Command
 
     private function detectGroup(string $uri, ?string $name): string
     {
-        // Merge by first URI segment, remove api prefix
         $segments = explode('/', trim($uri, '/'));
+
+        // Remove 'api' prefix if exists
         if (isset($segments[0]) && $segments[0] === 'api') {
-            return $segments[1] ?? 'general';
+            array_shift($segments);
         }
-        return $segments[0] ?? 'general';
+
+        $count = count($segments);
+        if ($count === 0) return 'general';
+
+        // If only one segment remains, use it
+        if ($count === 1) return $segments[0];
+
+        // Use penultimate segment
+        return $segments[$count - 2];
     }
+
 
     private function extractValidationRules(string $c, string $m): array
     {

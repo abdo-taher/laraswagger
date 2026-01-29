@@ -2,9 +2,10 @@
 
 return [
 
+    'app_name' => env('APP_NAME', 'Laravel'),
+    'file_name' => 'api-docs',
+    'path' => public_path('api-docs.json'),
     'generator' => [
-
-        'path' => 'api-docs',
 
         'base_url' => env('APP_URL','http://localhost' ),
 
@@ -27,13 +28,6 @@ return [
                 'password' => '12345678',
                 'token_key' => 'token',
             ],
-        ],
-    ],
-
-    'projects' => [
-        [
-            'name' => 'API',
-            'json' => public_path('laraswagger.json'),
         ],
     ],
 ];

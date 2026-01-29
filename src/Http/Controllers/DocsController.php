@@ -8,75 +8,72 @@ class DocsController extends \Illuminate\Routing\Controller
 {
     public function openapi()
     {
-        $projects = config('api-docs-generator.projects');
 
         $paths = [];
         $tags  = [];
 
-        foreach ($projects as $project) {
 
-            $json = Http::get($project['json'])->json();
-            if (!$json || !isset($json['endpoints'])) continue;
+        $json = Http::get(config('api-docs-generator.path'))->json();
+        if (!$json || !isset($json['endpoints'])) return ;
 
-            foreach ($json['endpoints'] as $ep) {
+        foreach ($json['endpoints'] as $ep) {
 
-                $path = $ep['uri'];
-                $method = strtolower(explode('|', $ep['method'])[0]);
+            $path = $ep['uri'];
+            $method = strtolower(explode('|', $ep['method'])[0]);
 
-                $tagName = $ep['group'] ?? 'general';
-                $tags[$tagName] = ['name' => $tagName];
+            $tagName = $ep['group'] ?? 'general';
+            $tags[$tagName] = ['name' => $tagName];
 
-                $projectBaseUrl = $json['base_url'] ?? '';
+            $projectBaseUrl = $json['base_url'] ?? '';
 
-                $exampleBody = $ep['response']['body'] ?? null;
-                $statusCode  = $ep['response']['status'] ?? 200;
+            $exampleBody = $ep['response']['body'] ?? null;
+            $statusCode  = $ep['response']['status'] ?? 200;
 
-                $operationId = !empty($ep['name'])
-                    ? str_replace(['.', '-'], '_', $ep['name'])
-                    : $method . '_' . md5($path);
+            $operationId = !empty($ep['name'])
+                ? str_replace(['.', '-'], '_', $ep['name'])
+                : $method . '_' . md5($path);
 
-                // Build requestBody for POST/PUT/PATCH
-                $requestBody = null;
-                if (in_array(strtoupper($method), ['POST', 'PUT', 'PATCH'])) {
-                    $validation = $ep['request']['validation'] ?? [];
-                    $requestBody = $this->buildRequestBodyFromValidation($validation);
-                }
+            // Build requestBody for POST/PUT/PATCH
+            $requestBody = null;
+            if (in_array(strtoupper($method), ['POST', 'PUT', 'PATCH'])) {
+                $validation = $ep['request']['validation'] ?? [];
+                $requestBody = $this->buildRequestBodyFromValidation($validation);
+            }
 
-                $paths[$path][$method] = [
-                    'tags' => [$tagName],
-                    'summary' => trim(($ep['name'] ?? '') . ' ' . $path),
-                    'description' => $ep['action'] ?? '',
-                    'operationId' => $operationId,
+            $paths[$path][$method] = [
+                'tags' => [$tagName],
+                'summary' => trim(($ep['name'] ?? '') . ' ' . $path),
+                'description' => $ep['action'] ?? '',
+                'operationId' => $operationId,
 
-                    // GET params
-                    'parameters' => $ep['parameters'] ?? [],
+                // GET params
+                'parameters' => $ep['parameters'] ?? [],
 
-                    // POST body
-                    'requestBody' => $requestBody,
+                // POST body
+                'requestBody' => $requestBody,
 
-                    // auth
-                    'security' => !empty($ep['auth']['required'])
-                        ? [['bearerAuth' => []]]
-                        : [],
+                // auth
+                'security' => !empty($ep['auth']['required'])
+                    ? [['bearerAuth' => []]]
+                    : [],
 
-                    // server per project
-                    'servers' => [
-                        ['url' => $projectBaseUrl]
-                    ],
+                // server per project
+                'servers' => [
+                    ['url' => $projectBaseUrl]
+                ],
 
-                    // response
-                    'responses' => [
-                        (string)$statusCode => [
-                            'description' => 'Auto captured response',
-                            'content' => [
-                                'application/json' => [
-                                    'example' => $exampleBody
-                                ]
+                // response
+                'responses' => [
+                    (string)$statusCode => [
+                        'description' => 'Auto captured response',
+                        'content' => [
+                            'application/json' => [
+                                'example' => $exampleBody
                             ]
                         ]
                     ]
-                ];
-            }
+                ]
+            ];
         }
 
         // sort tags + general last
@@ -87,23 +84,8 @@ class DocsController extends \Illuminate\Routing\Controller
             return strcmp($a['name'], $b['name']);
         });
 
-        return response()->json([
-            'openapi' => '3.0.0',
-            'info' => [
-                'title' => 'Global API Documentation',
-                'version' => '1.0.0',
-            ],
-            'components' => [
-                'securitySchemes' => [
-                    'bearerAuth' => [
-                        'type' => 'http',
-                        'scheme' => 'bearer',
-                    ],
-                ],
-            ],
-            'tags' => $sortedTags,
-            'paths' => $paths,
-        ]);
+        return $this->swaggerResponse($sortedTags, $paths);
+
     }
 
     private function buildRequestBodyFromValidation(array $validation): ?array
@@ -157,6 +139,27 @@ class DocsController extends \Illuminate\Routing\Controller
     public function swagger()
     {
         return view('Laraswagger::swagger');
+    }
+
+    public function swaggerResponse($sortedTags = null , $paths = null)
+    {
+        return response()->json([
+            'openapi' => '3.0.0',
+            'info' => [
+                'title' => config('APP_NAME').' API Documentation',
+                'version' => '1.0.0',
+            ],
+            'components' => [
+                'securitySchemes' => [
+                    'bearerAuth' => [
+                        'type' => 'http',
+                        'scheme' => 'bearer',
+                    ],
+                ],
+            ],
+            'tags' => $sortedTags,
+            'paths' => $paths,
+        ]);
     }
 }
 

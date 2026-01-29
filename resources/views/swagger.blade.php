@@ -11,7 +11,7 @@
 <script>
 window.onload = function() {
     SwaggerUIBundle({
-        url: "{{ base_path(config('laraswagger.path')) }}",
+        url: "{{ url(config('laraswagger.file_name')) }}",
         dom_id: '#swagger-ui',
 
         // ✅ search/filter

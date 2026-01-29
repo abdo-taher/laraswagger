@@ -3,6 +3,7 @@
 return [
 
     'app_name' => env('APP_NAME', 'Laravel'),
+    'file_name' => 'api-docs',
     'path' => public_path('api-docs.json'),
     'generator' => [
 

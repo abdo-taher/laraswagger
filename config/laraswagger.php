@@ -4,9 +4,9 @@ return [
 
     'generator' => [
 
-        'path' => 'public/api-docs.json',
+        'path' => 'api-docs',
 
-        'base_url' => null,
+        'base_url' => env('APP_URL','http://localhost' ),
 
         'capture_response' => true,
 

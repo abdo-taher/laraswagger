@@ -22,7 +22,7 @@ class LaraSwaggerServiceProvider extends ServiceProvider
         ], 'laraswagger-config');
 
         if (config('laraswagger.ui.enabled', true)) {
-            $this->loadViewsFrom(__DIR__ . '/../resources/views', 'laraswagger');
+            $this->loadViewsFrom(__DIR__ . '/../resources/views', 'Laraswagger');
             $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
         }
 

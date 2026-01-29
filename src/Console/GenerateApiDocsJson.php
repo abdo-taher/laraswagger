@@ -11,34 +11,28 @@ use ReflectionMethod;
 class GenerateApiDocsJson extends Command
 {
     protected $signature = 'api:docs-json
-        {--path= : Output file path}
-        {--base-url= : Base URL}
-        {--capture-response= : 1/0}
-        {--timeout= : Timeout seconds}
-        {--auth-mode= : none|manual|login}
-        {--token= : Manual token}
-        {--token-type= : Token prefix}
-        {--login-url= : Login URL}
-        {--login-method= : POST|GET}
-        {--login-email= : Login email}
-        {--login-password= : Login password}
-        {--token-key= : Token key}
-        {--skip= : Skip routes}';
+        {--path=}
+        {--base-url=}
+        {--capture-response=}
+        {--timeout=}
+        {--auth-mode=}
+        {--token=}
+        {--token-type=}
+        {--login-url=}
+        {--login-method=}
+        {--login-email=}
+        {--login-password=}
+        {--token-key=}
+        {--skip=}';
 
-    protected $description = 'Generate api-docs.json using LaraSwagger';
+    protected $description = 'Generate Swagger-style API documentation JSON';
 
     public function handle()
     {
-        $capture = (bool)$this->optionOrConfig(
-            'capture-response',
-            'laraswagger.generator.capture_response',
-            true
-        );
-
-        $timeout = (int)$this->optionOrConfig(
-            'timeout',
-            'laraswagger.generator.timeout',
-            15
+        $timeout = (int)($this->option('timeout') ?? config('laraswagger.generator.timeout', 15));
+        $capture = filter_var(
+            $this->option('capture-response') ?? config('laraswagger.generator.capture_response', true),
+            FILTER_VALIDATE_BOOL
         );
 
         $skip = $this->option('skip')
@@ -46,11 +40,9 @@ class GenerateApiDocsJson extends Command
             : config('laraswagger.generator.skip', []);
 
         $token = $this->resolveToken($timeout);
-
         $endpoints = [];
 
         foreach (Route::getRoutes() as $route) {
-
             if (!str_starts_with($route->uri(), 'api/')) continue;
             if ($route->getActionName() === 'Closure') continue;
             if ($this->shouldSkipRoute($route->uri(), $skip)) continue;
@@ -66,15 +58,8 @@ class GenerateApiDocsJson extends Command
                 'method' => implode('|', $methods),
                 'uri' => '/' . $route->uri(),
                 'name' => $route->getName(),
-                'action' => $route->getActionName(),
-                'parameters' => $this->mergeParameters(
-                    $route->parameterNames(),
-                    $this->extractQueryParametersFromController($controller, $method)
-                ),
-                'auth' => ['required' => $authRequired],
-                'request' => [
-                    'validation' => $this->extractValidationRules($controller, $method)
-                ],
+                'parameters' => $this->extractValidationRules($controller, $method),
+                'auth_required' => $authRequired,
                 'response' => null,
             ];
 
@@ -89,17 +74,8 @@ class GenerateApiDocsJson extends Command
             $endpoints[] = $endpoint;
         }
 
-        $path = base_path(
-            $this->optionOrConfig(
-                'path',
-                'laraswagger.generator.path',
-                'public/api-docs.json'
-            )
-        );
-
-        if (!is_dir(dirname($path))) {
-            mkdir(dirname($path), 0775, true);
-        }
+        $path = base_path($this->option('path') ?? config('laraswagger.generator.path'));
+        if (!is_dir(dirname($path))) mkdir(dirname($path), 0775, true);
 
         file_put_contents($path, json_encode([
             'project' => config('app.name'),
@@ -108,20 +84,15 @@ class GenerateApiDocsJson extends Command
             'endpoints' => $endpoints,
         ], JSON_PRETTY_PRINT));
 
-        $this->info("✅ api-docs.json generated");
+        $this->info('✅ API documentation generated successfully');
     }
 
-    /* ---------- helpers ---------- */
-
-    private function optionOrConfig(string $option, string $config, mixed $default = null): mixed
-    {
-        return $this->option($option) ?? config($config, $default);
-    }
+    /* ---------- Helpers ---------- */
 
     private function getBaseUrl(): string
     {
         return rtrim(
-            $this->optionOrConfig('base-url', 'laraswagger.generator.base_url', config('app.url')),
+            $this->option('base-url') ?? config('laraswagger.generator.base_url', config('app.url')),
             '/'
         );
     }
@@ -130,53 +101,33 @@ class GenerateApiDocsJson extends Command
     {
         if ($this->option('token')) return $this->option('token');
 
-        $mode = $this->optionOrConfig('auth-mode', 'laraswagger.generator.auth.mode', 'none');
-
-        if ($mode === 'manual') {
-            return config('laraswagger.generator.auth.token');
+        if (($this->option('auth-mode') ?? config('laraswagger.generator.auth.mode')) !== 'login') {
+            return null;
         }
 
-        if ($mode === 'login') {
-            return $this->getTokenFromLogin($timeout);
-        }
+        $res = Http::timeout($timeout)->post(
+            $this->getBaseUrl() . ($this->option('login-url') ?? config('laraswagger.generator.auth.login.url')),
+            [
+                'email' => $this->option('login-email') ?? config('laraswagger.generator.auth.login.email'),
+                'password' => $this->option('login-password') ?? config('laraswagger.generator.auth.login.password'),
+            ]
+        );
 
-        return null;
-    }
-
-    private function getTokenFromLogin(int $timeout): ?string
-    {
-        $url = $this->getBaseUrl() . config('laraswagger.generator.auth.login.url');
-        $res = Http::timeout($timeout)->post($url, [
-            'email' => config('laraswagger.generator.auth.login.email'),
-            'password' => config('laraswagger.generator.auth.login.password'),
-        ]);
-
-        return data_get($res->json(), 'data.' . config('laraswagger.generator.auth.login.token_key'));
+        return data_get($res->json(), $this->option('token-key') ?? config('laraswagger.generator.auth.login.token_key'));
     }
 
     private function captureResponse(string $url, ?string $token, int $timeout): array
     {
         $req = Http::timeout($timeout)->acceptJson();
-
-        if ($token) {
-            $req->withToken($token, config('laraswagger.generator.auth.token_type'));
-        }
+        if ($token) $req->withToken($token, $this->option('token-type') ?? 'Bearer');
 
         $res = $req->get($url);
-
-        return [
-            'status' => $res->status(),
-            'body' => $res->json() ?? $res->body(),
-        ];
+        return ['status' => $res->status(), 'body' => $res->json() ?? $res->body()];
     }
-
-    /* ---- utility methods unchanged logic ---- */
 
     private function parseAction(string $action): array
     {
-        return str_contains($action, '@')
-            ? explode('@', $action)
-            : (str_contains($action, '::') ? explode('::', $action) : [null, null]);
+        return str_contains($action, '@') ? explode('@', $action) : [null, null];
     }
 
     private function shouldSkipRoute(string $uri, array $skip): bool
@@ -187,24 +138,12 @@ class GenerateApiDocsJson extends Command
 
     private function isAuthRequired(array $middleware): bool
     {
-        foreach ($middleware as $m) {
-            if ($m === 'auth' || str_starts_with($m, 'auth:')) return true;
-        }
-        return false;
+        return collect($middleware)->contains(fn ($m) => str_starts_with($m, 'auth'));
     }
 
     private function detectGroup(string $uri, ?string $name): string
     {
-        $parts = explode('/', trim($uri, '/'));
-        return $parts[1] ?? ($name ? explode('.', $name)[0] : 'general');
-    }
-
-    private function mergeParameters(array $route, array $query): array
-    {
-        return array_merge(
-            array_map(fn($p) => ['name'=>$p,'in'=>'path','required'=>true], $route),
-            $query
-        );
+        return explode('/', trim($uri, '/'))[1] ?? ($name ? explode('.', $name)[0] : 'general');
     }
 
     private function extractValidationRules(string $c, string $m): array
@@ -218,11 +157,6 @@ class GenerateApiDocsJson extends Command
                 }
             }
         } catch (\Throwable) {}
-        return [];
-    }
-
-    private function extractQueryParametersFromController(string $c, string $m): array
-    {
         return [];
     }
 

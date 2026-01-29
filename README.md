@@ -21,7 +21,7 @@ To install **LaraSwagger** via Composer directly from Git, follow these steps:
    Run the following command in your terminal to install the package:
 
    ```bash
-   composer require abdo-taher/laraswagger:dev-main
+   composer require abdo-taher/laraswagger
    ```
 
 2. **Publish the config file:**
@@ -29,7 +29,7 @@ To install **LaraSwagger** via Composer directly from Git, follow these steps:
    Publish the configuration file for the package to customize settings:
 
    ```bash
-   php artisan vendor:publish --provider="LaraSwagger\LaraSwaggerServiceProvider" --tag="config"
+   php artisan vendor:publish --tag="config"
    ```
 
 ---

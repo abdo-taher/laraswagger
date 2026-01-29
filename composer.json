@@ -1,6 +1,6 @@
 {
     "name": "abdo-taher/laraswagger",
-    "description": "Generate Swagger API docs for Laravel projects",
+    "description": "Auto-generate Swagger-style API documentation for Laravel projects",
     "type": "library",
     "license": "MIT",
     "authors": [
@@ -11,9 +11,9 @@
     ],
     "require": {
         "php": "^8.1",
-        "illuminate/support": "^10.0",
-        "illuminate/console": "^10.0",
-        "illuminate/http": "^10.0"
+        "illuminate/support": "^9.0|^10.0|^11.0",
+        "illuminate/console": "^9.0|^10.0|^11.0",
+        "illuminate/http": "^9.0|^10.0|^11.0"
     },
     "autoload": {
         "psr-4": {
@@ -27,6 +27,6 @@
             ]
         }
     },
-    "minimum-stability": "dev",
+    "minimum-stability": "stable",
     "prefer-stable": true
 }

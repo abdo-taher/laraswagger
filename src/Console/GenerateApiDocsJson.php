@@ -190,20 +190,20 @@ class GenerateApiDocsJson extends Command
     {
         $segments = explode('/', trim($uri, '/'));
 
-        // Remove 'api' prefix if exists
-        if (isset($segments[0]) && $segments[0] === 'api') {
+        // Remove api prefix
+        if ($segments[0] === 'api') {
             array_shift($segments);
         }
 
-        $count = count($segments);
-        if ($count === 0) return 'general';
+        // dashboard/profile
+        if (count($segments) >= 2) {
+            return $segments[0] . '/' . $segments[1];
+        }
 
-        // If only one segment remains, use it
-        if ($count === 1) return $segments[0];
-
-        // Use penultimate segment
-        return $segments[$count - 2];
+        // fallback
+        return $segments[0] ?? 'general';
     }
+
 
 
     private function extractValidationRules(string $c, string $m): array

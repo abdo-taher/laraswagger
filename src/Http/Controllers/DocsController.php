@@ -9,96 +9,67 @@ class DocsController extends \Illuminate\Routing\Controller
     public function openapi()
     {
         $paths = [];
-        $tags  = [];
+        $tags = [];
         $tagGroups = [];
 
         $json = Http::get(config('api-docs-generator.path'))->json();
         if (!$json || !isset($json['endpoints'])) return;
 
         foreach ($json['endpoints'] as $ep) {
-
             $path = $ep['uri'];
             $method = strtolower(explode('|', $ep['method'])[0]);
 
-            /* ===============================
-               ✅ HIERARCHICAL GROUPING LOGIC
-               api/dashboard/profile/update
-               => dashboard / profile
-            =============================== */
+            // Remove leading/trailing slashes & api prefix
+            $segments = array_filter(explode('/', trim($path, '/')), fn($s) => $s !== 'api');
 
-            $segments = explode('/', trim($path, '/'));
+            if (!$segments) continue;
 
-// remove api
-            if ($segments[0] === 'api') array_shift($segments);
+            // Leaf = last segment
+            $leafTag = end($segments);
 
-            $level1 = $segments[0] ?? 'general';   // dashboard | app | website
-            $level2 = $segments[1] ?? null;        // admin | client
-            $level3 = $segments[2] ?? 'general';   // profile
+            // Add leaf tag to Swagger tags
+            $tags[$leafTag] = ['name' => $leafTag];
 
-// Swagger tag = leaf ONLY
-            $tagName = $level3;
-            $tags[$tagName] = ['name' => $tagName];
+            // Build dynamic tagGroups recursively
+            $this->addToTagGroups($tagGroups, $segments, $leafTag);
 
-// build hierarchy
-            if ($level2) {
-                $tagGroups[$level1][$level2][] = $tagName;
-            } else {
-                $tagGroups[$level1][] = $tagName;
-            }
-
-
-
-            /* =============================== */
-
-            $projectBaseUrl = $json['base_url'] ?? '';
+            // Example request/response handling
+            $requestBody = in_array(strtoupper($method), ['POST', 'PUT', 'PATCH'])
+                ? $this->buildRequestBodyFromValidation($ep['request']['validation'] ?? [])
+                : null;
 
             $exampleBody = $ep['response']['body'] ?? null;
-            $statusCode  = $ep['response']['status'] ?? 200;
+            $statusCode = $ep['response']['status'] ?? 200;
 
             $operationId = !empty($ep['name'])
                 ? str_replace(['.', '-'], '_', $ep['name'])
                 : $method . '_' . md5($path);
 
-            $requestBody = null;
-            if (in_array(strtoupper($method), ['POST', 'PUT', 'PATCH'])) {
-                $validation = $ep['request']['validation'] ?? [];
-                $requestBody = $this->buildRequestBodyFromValidation($validation);
-            }
-
             $paths[$path][$method] = [
-                'tags' => [$tagName],
+                'tags' => [$leafTag],
                 'summary' => trim(($ep['name'] ?? '') . ' ' . $path),
                 'description' => $ep['action'] ?? '',
                 'operationId' => $operationId,
                 'parameters' => $ep['parameters'] ?? [],
                 'requestBody' => $requestBody,
-                'security' => !empty($ep['auth']['required'])
-                    ? [['bearerAuth' => []]]
-                    : [],
-                'servers' => [
-                    ['url' => $projectBaseUrl]
-                ],
+                'security' => !empty($ep['auth']['required']) ? [['bearerAuth' => []]] : [],
+                'servers' => [['url' => $json['base_url'] ?? '']],
                 'responses' => [
                     (string)$statusCode => [
                         'description' => 'Auto captured response',
                         'content' => [
-                            'application/json' => [
-                                'example' => $exampleBody
-                            ]
+                            'application/json' => ['example' => $exampleBody]
                         ]
                     ]
                 ]
             ];
         }
 
+        // Flatten tags for Swagger
         $sortedTags = array_values($tags);
-        usort($sortedTags, function ($a, $b) {
-            if ($a['name'] === 'general') return 1;
-            if ($b['name'] === 'general') return -1;
-            return strcmp($a['name'], $b['name']);
-        });
+        usort($sortedTags, fn($a, $b) => $a['name'] === 'general' ? 1 : ($b['name'] === 'general' ? -1 : strcmp($a['name'], $b['name'])));
 
-        return $this->swaggerResponse($sortedTags, $paths);
+        return $this->swaggerResponse($sortedTags, $paths, $tagGroups);
     }
 
     private function buildRequestBodyFromValidation(array $validation): ?array
@@ -140,6 +111,34 @@ class DocsController extends \Illuminate\Routing\Controller
         ];
     }
 
+    private function addToTagGroups(array &$groups, array $segments, string $leaf)
+    {
+        $current = &$groups;
+        foreach ($segments as $seg) {
+            if (!isset($current[$seg])) $current[$seg] = [];
+            $current = &$current[$seg];
+        }
+        // Store leaf tag
+        $current = $leaf;
+    }
+
+    private function buildSwaggerGroups(array $groups): array
+    {
+        $result = [];
+        foreach ($groups as $key => $value) {
+            if (is_array($value)) {
+                $result[] = [
+                    'name' => ucfirst($key),
+                    'tags' => $this->buildSwaggerGroups($value)
+                ];
+            } else {
+                $result[] = ['name' => $value, 'tags' => []];
+            }
+        }
+        return $result;
+    }
+
+
     public function swagger()
     {
         return view('Laraswagger::swagger');
@@ -147,32 +146,13 @@ class DocsController extends \Illuminate\Routing\Controller
 
     public function swaggerResponse($sortedTags, $paths, $tagGroups)
     {
-        $groups = [];
-
-        foreach ($tagGroups as $lvl1 => $children) {
-
-            $subGroups = [];
-
-            foreach ($children as $lvl2 => $tags) {
-                $subGroups[] = [
-                    'name' => ucfirst($lvl2),
-                    'tags' => array_values(array_unique($tags)),
-                ];
-            }
-
-            $groups[] = [
-                'name' => ucfirst($lvl1),
-                'tags' => $subGroups,
-            ];
-        }
-
         return response()->json([
             'openapi' => '3.0.0',
             'info' => [
                 'title' => config('app.name').' API Documentation',
                 'version' => '1.0.0',
             ],
-            'x-tagGroups' => $groups, // ✅ 3 LEVELS
+            'x-tagGroups' => $this->buildSwaggerGroups($tagGroups),
             'components' => [
                 'securitySchemes' => [
                     'bearerAuth' => [
@@ -181,10 +161,11 @@ class DocsController extends \Illuminate\Routing\Controller
                     ],
                 ],
             ],
-            'tags' => array_values($sortedTags),
+            'tags' => $sortedTags,
             'paths' => $paths,
         ]);
     }
+
 
 
 }
